@@ -44,7 +44,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - k3s_kubeconfig:/k3s:ro
     group_add:
-      - "${DOCKER_GID:-999}"
+      - "${DOCKER_GID:-1001}"
     networks:
       - net-qa
       - net-prd

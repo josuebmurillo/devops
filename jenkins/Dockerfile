@@ -1,11 +1,14 @@
+FROM docker:cli AS docker-cli
+
 FROM jenkins/jenkins:lts
+
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    docker.io \
     gnupg \
     lsb-release \
     python3 \
@@ -19,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chmod +x /usr/local/bin/kubectl && \
     python3 -m pip install --break-system-packages --no-cache-dir \
       ansible==10.6.0 kubernetes==31.0.0 pytest==8.3.3 && \
+    command -v docker && docker --version && \
     rm -rf /var/lib/apt/lists/*
 
 COPY ansible/requirements.yml /tmp/ansible-requirements.yml
