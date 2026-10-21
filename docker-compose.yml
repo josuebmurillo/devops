@@ -20,6 +20,8 @@ services:
       - "6443:6443"
       - "30081:30081"
       - "30082:30082"
+      - "30083:30083"
+      - "30084:30084"
     volumes:
       - k3s_kubeconfig:/output
     networks:
@@ -79,6 +81,16 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - net-mon
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    container_name: blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - net-mon
       - net-qa
       - net-prd
 
@@ -89,6 +101,9 @@ services:
       - "3001:3000"
     depends_on:
       - prometheus
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - net-mon
 

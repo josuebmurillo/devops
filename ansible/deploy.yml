@@ -9,6 +9,28 @@
           - env in ['qa', 'prd']
         fail_msg: "El entorno debe ser 'qa' o 'prd'."
 
+    - name: Asegurar namespace del entorno
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ env }}"
+
+    - name: Publicar el contenido estático como ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: web-site
+            namespace: "{{ env }}"
+          data:
+            index.html: "{{ lookup('ansible.builtin.file', playbook_dir + '/../web/index.html') }}"
+            default.conf: "{{ lookup('ansible.builtin.file', playbook_dir + '/../web/nginx.conf') }}"
+
     - name: Aplicar manifiesto K8s en Ambiente QA
       kubernetes.core.k8s:
         state: present

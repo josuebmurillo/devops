@@ -18,30 +18,96 @@ pipeline {
             }
         }
 
-        stage('2. Pruebas unitarias') {
+        stage('2. Detectar cambios de la aplicación web') {
+            steps {
+                script {
+                    def changedPaths = []
+                    currentBuild.changeSets.each { changeSet ->
+                        changeSet.items.each { entry ->
+                            entry.affectedFiles.each { file -> changedPaths << file.path }
+                        }
+                    }
+
+                    def relevantPrefixes = ['web/', 'tests/']
+                    def relevantFiles = [
+                        'Jenkinsfile',
+                        'ansible/deploy.yml',
+                        'k8s/deploy-qa.yml',
+                        'k8s/deploy-prd.yaml'
+                    ]
+                    def firstBuild = currentBuild.previousBuild == null
+                    def appChanged = firstBuild || changedPaths.any { path ->
+                        relevantFiles.contains(path) || relevantPrefixes.any { prefix -> path.startsWith(prefix) }
+                    }
+
+                    env.WEB_APP_CHANGED = appChanged.toString()
+                    if (appChanged) {
+                        echo "Se detectaron cambios relevantes: ${changedPaths.join(', ')}"
+                    } else {
+                        echo 'Sin cambios en la aplicación, pruebas o despliegue web; se omiten sus etapas.'
+                    }
+                }
+            }
+        }
+
+        stage('3. Pruebas unitarias') {
+            when {
+                expression { env.WEB_APP_CHANGED == 'true' }
+            }
             steps {
                 echo 'Ejecutando pruebas unitarias con pytest...'
                 sh 'python3 -m pytest -q tests/unit/'
             }
         }
 
-        stage('3. Build de imagen temporal') {
+        stage('4. Build de imagen temporal') {
+            when {
+                expression { env.WEB_APP_CHANGED == 'true' }
+            }
             steps {
-                echo 'Construyendo imagen Docker para análisis...'
-                sh 'docker build -t "$DOCKER_IMAGE" .'
+                echo 'Construyendo imagen de la aplicación web estática...'
+                sh 'docker build -f web/Dockerfile -t "$DOCKER_IMAGE" .'
             }
         }
 
-        stage('4. Escaneo de imagen (Trivy)') {
+        stage('5. Prueba HTTP de la aplicación') {
+            when {
+                expression { env.WEB_APP_CHANGED == 'true' }
+            }
+            steps {
+                sh '''set -eu
+                    SMOKE_CONTAINER="web-app-smoke-${BUILD_NUMBER}"
+                    cleanup() { docker rm --force "$SMOKE_CONTAINER" >/dev/null 2>&1 || true; }
+                    trap cleanup EXIT
+                    docker run --detach --name "$SMOKE_CONTAINER" --network net-qa "$DOCKER_IMAGE"
+                    curl --retry 10 --retry-connrefused --retry-delay 1 --fail --silent \
+                        "http://${SMOKE_CONTAINER}/health" -o /tmp/web-health.txt
+                    grep -q '^ok' /tmp/web-health.txt
+                    curl --retry 5 --retry-connrefused --retry-delay 1 --fail --silent \
+                        "http://${SMOKE_CONTAINER}/" -o /tmp/web-index.html
+                    grep -q 'DevOps Lab' /tmp/web-index.html
+                    grep -q 'Aplicación operativa' /tmp/web-index.html
+                    echo 'Smoke test HTTP aprobado.'
+                '''
+            }
+        }
+
+        stage('6. Escaneo de imagen (Trivy)') {
+            when {
+                expression { env.WEB_APP_CHANGED == 'true' }
+            }
             steps {
                 echo 'Buscando vulnerabilidades críticas con Trivy...'
                 sh 'trivy image --severity CRITICAL --exit-code 1 --no-progress "$DOCKER_IMAGE"'
             }
         }
 
-        stage('5. Despliegue QA (Kubernetes)') {
+        stage('7. Despliegue QA (Kubernetes)') {
             when {
-                branch 'ambiente-qa'
+                allOf {
+                    branch 'ambiente-qa'
+                    expression { env.WEB_APP_CHANGED == 'true' }
+                }
             }
             steps {
                 sh "ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=qa"
@@ -49,9 +115,12 @@ pipeline {
             }
         }
 
-        stage('6. Pruebas DAST (OWASP ZAP)') {
+        stage('8. Pruebas DAST (OWASP ZAP)') {
             when {
-                branch 'ambiente-qa'
+                allOf {
+                    branch 'ambiente-qa'
+                    expression { env.WEB_APP_CHANGED == 'true' }
+                }
             }
             steps {
                 sh '''docker run --rm --network net-qa \
@@ -66,9 +135,12 @@ pipeline {
             }
         }
 
-        stage('7. Pruebas de carga (k6)') {
+        stage('9. Pruebas de carga (k6)') {
             when {
-                branch 'ambiente-qa'
+                allOf {
+                    branch 'ambiente-qa'
+                    expression { env.WEB_APP_CHANGED == 'true' }
+                }
             }
             steps {
                 sh '''docker run --rm --network net-qa \
@@ -78,9 +150,12 @@ pipeline {
             }
         }
 
-        stage('8. Aprobación y despliegue PRD') {
+        stage('10. Aprobación y despliegue PRD') {
             when {
-                branch 'main'
+                allOf {
+                    branch 'main'
+                    expression { env.WEB_APP_CHANGED == 'true' }
+                }
             }
             steps {
                 script {
@@ -125,7 +200,11 @@ pipeline {
                     echo "No se pudo enviar el reporte por correo: ${err.getMessage()}"
                 }
             }
-            sh 'docker rmi "$DOCKER_IMAGE" --force || true'
+            script {
+                if (env.WEB_APP_CHANGED == 'true') {
+                    sh 'docker rmi "$DOCKER_IMAGE" --force || true'
+                }
+            }
         }
         aborted {
             echo 'Despliegue cancelado; no se aplicaron cambios adicionales a PRD.'

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aplicación estática de demostración del laboratorio DevOps.">
+    <title>DevOps Lab | Aplicación de prueba</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3f6fb;
+        color: #172033;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background:
+          radial-gradient(ellipse at 15% 10%, rgb(85 116 255 / 14%), transparent 35%),
+          radial-gradient(ellipse at 90% 90%, rgb(30 190 160 / 12%), transparent 30%),
+          #f3f6fb;
+      }
+
+      main {
+        width: min(100%, 720px);
+        padding: clamp(2rem, 7vw, 4rem);
+        border: 1px solid #e5eaf3;
+        border-radius: 28px;
+        background: rgb(255 255 255 / 94%);
+        box-shadow: 0 24px 80px rgb(32 50 91 / 12%);
+      }
+
+      .eyebrow {
+        margin: 0 0 1rem;
+        color: #5267d9;
+        font-size: .8rem;
+        font-weight: 750;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2.7rem, 9vw, 5.25rem);
+        letter-spacing: -.07em;
+        line-height: .98;
+      }
+
+      .intro {
+        max-width: 48ch;
+        margin: 1.5rem 0 2rem;
+        color: #5d6880;
+        font-size: 1.1rem;
+        line-height: 1.7;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: .65rem;
+        padding: .75rem 1rem;
+        border: 1px solid #ccefe2;
+        border-radius: 999px;
+        background: #edfbf5;
+        color: #16734f;
+        font-size: .95rem;
+        font-weight: 700;
+      }
+
+      .status::before {
+        width: .6rem;
+        height: .6rem;
+        border-radius: 50%;
+        background: #1eaf72;
+        box-shadow: 0 0 0 4px rgb(30 175 114 / 12%);
+        content: "";
+      }
+
+      footer {
+        margin-top: 3rem;
+        color: #7b8498;
+        font-size: .85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Laboratorio de entrega continua</p>
+      <h1>DevOps<br>Lab</h1>
+      <p class="intro">
+        Aplicación web estática para validar el ciclo de pruebas, análisis de seguridad
+        y despliegue automatizado en Kubernetes.
+      </p>
+      <p class="status" id="app-status" role="status">Aplicación operativa</p>
+      <footer>Desplegada con Docker, Jenkins y Kubernetes.</footer>
+    </main>
+  </body>
+</html>

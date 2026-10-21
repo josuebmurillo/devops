@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: DevOps Lab
+    orgId: 1
+    folder: DevOps Lab
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
