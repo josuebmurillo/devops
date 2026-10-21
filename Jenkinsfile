@@ -110,8 +110,8 @@ pipeline {
                 }
             }
             steps {
-                sh "ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=qa"
-                sh 'kubectl rollout status deployment/web-qa -n qa --timeout=180s'
+                sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=qa"
+                sh '/usr/local/bin/kubeconfig-entrypoint.sh kubectl rollout status deployment/web-qa -n qa --timeout=180s'
             }
         }
 
@@ -166,11 +166,11 @@ pipeline {
                     }
 
                     try {
-                        sh "ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=prd"
-                        sh 'kubectl rollout status deployment/web-prd -n prd --timeout=180s'
+                        sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=prd"
+                        sh '/usr/local/bin/kubeconfig-entrypoint.sh kubectl rollout status deployment/web-prd -n prd --timeout=180s'
                     } catch (err) {
                         echo 'Falló el despliegue PRD; intentando restaurar la revisión anterior.'
-                        sh 'kubectl rollout undo deployment/web-prd -n prd || true'
+                        sh '/usr/local/bin/kubeconfig-entrypoint.sh kubectl rollout undo deployment/web-prd -n prd || true'
                         throw err
                     }
                 }
