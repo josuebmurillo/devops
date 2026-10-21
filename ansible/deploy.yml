@@ -7,6 +7,8 @@
         that:
           - env is defined
           - env in ['qa', 'prd']
+          - web_image is defined
+          - web_image | length > 0
         fail_msg: "El entorno debe ser 'qa' o 'prd'."
 
     - name: Asegurar namespace del entorno
@@ -18,27 +20,13 @@
           metadata:
             name: "{{ env }}"
 
-    - name: Publicar el contenido estático como ConfigMap
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: web-site
-            namespace: "{{ env }}"
-          data:
-            index.html: "{{ lookup('ansible.builtin.file', playbook_dir + '/../web/index.html') }}"
-            default.conf: "{{ lookup('ansible.builtin.file', playbook_dir + '/../web/nginx.conf') }}"
+    - name: Renderizar manifiesto Kubernetes del entorno
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../k8s/deploy-{{ 'qa.yml' if env == 'qa' else 'prd.yaml' }}"
+        dest: "/tmp/deploy-{{ env }}.yaml"
+        mode: "0600"
 
-    - name: Aplicar manifiesto K8s en Ambiente QA
+    - name: Aplicar manifiesto Kubernetes
       kubernetes.core.k8s:
         state: present
-        src: "{{ playbook_dir }}/../k8s/deploy-qa.yml"
-      when: env == 'qa'
-
-    - name: Aplicar manifiesto K8s en Ambiente PRD
-      kubernetes.core.k8s:
-        state: present
-        src: "{{ playbook_dir }}/../k8s/deploy-prd.yaml"
-      when: env == 'prd'
+        src: "/tmp/deploy-{{ env }}.yaml"

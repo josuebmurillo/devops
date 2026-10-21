@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "web-app:${BUILD_NUMBER}"
+        DOCKER_IMAGE = "docker.io/library/web-app:pending"
         QA_URL = "http://k3s-server:30081"
         REPORT_EMAIL = "josuebm912@gmail.com"
     }
@@ -66,6 +66,13 @@ pipeline {
             }
             steps {
                 echo 'Construyendo imagen de la aplicación web estática...'
+                script {
+                    def commitTag = sh(
+                        script: 'git rev-parse --short=12 HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.DOCKER_IMAGE = "docker.io/library/web-app:${commitTag}"
+                }
                 sh 'docker build -f web/Dockerfile -t "$DOCKER_IMAGE" .'
             }
         }
@@ -102,7 +109,22 @@ pipeline {
             }
         }
 
-        stage('7. Despliegue QA (Kubernetes)') {
+        stage('7. Cargar imagen aprobada en K3s') {
+            when {
+                expression { env.WEB_APP_CHANGED == 'true' }
+            }
+            steps {
+                sh '''set -eu
+                    IMAGE_ARCHIVE="$WORKSPACE/web-app-${BUILD_NUMBER}.tar"
+                    docker save "$DOCKER_IMAGE" --output "$IMAGE_ARCHIVE"
+                    docker exec -i k3s-server ctr --namespace k8s.io images import - < "$IMAGE_ARCHIVE"
+                    rm -f "$IMAGE_ARCHIVE"
+                    docker exec k3s-server ctr --namespace k8s.io images ls --quiet | grep -Fx "$DOCKER_IMAGE"
+                '''
+            }
+        }
+
+        stage('8. Despliegue QA (Kubernetes)') {
             when {
                 allOf {
                     branch 'ambiente-qa'
@@ -110,12 +132,12 @@ pipeline {
                 }
             }
             steps {
-                sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=qa"
+                sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e 'env=qa web_image=${DOCKER_IMAGE}'"
                 sh '/usr/local/bin/kubeconfig-entrypoint.sh kubectl rollout status deployment/web-qa -n qa --timeout=180s'
             }
         }
 
-        stage('8. Pruebas DAST (OWASP ZAP)') {
+        stage('9. Pruebas DAST (OWASP ZAP)') {
             when {
                 allOf {
                     branch 'ambiente-qa'
@@ -135,7 +157,7 @@ pipeline {
             }
         }
 
-        stage('9. Pruebas de carga (k6)') {
+        stage('10. Pruebas de carga (k6)') {
             when {
                 allOf {
                     branch 'ambiente-qa'
@@ -150,7 +172,7 @@ pipeline {
             }
         }
 
-        stage('10. Aprobación y despliegue PRD') {
+        stage('11. Aprobación y despliegue PRD') {
             when {
                 allOf {
                     branch 'main'
@@ -166,7 +188,7 @@ pipeline {
                     }
 
                     try {
-                        sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e env=prd"
+                        sh "/usr/local/bin/kubeconfig-entrypoint.sh ansible-playbook -i ansible/inventory.ini ansible/deploy.yml -e 'env=prd web_image=${DOCKER_IMAGE}'"
                         sh '/usr/local/bin/kubeconfig-entrypoint.sh kubectl rollout status deployment/web-prd -n prd --timeout=180s'
                     } catch (err) {
                         echo 'Falló el despliegue PRD; intentando restaurar la revisión anterior.'
