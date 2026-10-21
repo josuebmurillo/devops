@@ -1,0 +1,22 @@
+- name: Desplegar aplicación en Kubernetes K3s
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Validar entorno solicitado
+      ansible.builtin.assert:
+        that:
+          - env is defined
+          - env in ['qa', 'prd']
+        fail_msg: "El entorno debe ser 'qa' o 'prd'."
+
+    - name: Aplicar manifiesto K8s en Ambiente QA
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ playbook_dir }}/../k8s/deploy-qa.yml"
+      when: env == 'qa'
+
+    - name: Aplicar manifiesto K8s en Ambiente PRD
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ playbook_dir }}/../k8s/deploy-prd.yaml"
+      when: env == 'prd'

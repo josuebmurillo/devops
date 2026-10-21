@@ -1,0 +1,108 @@
+services:
+  # Clúster de Kubernetes K3s Embebido
+  k3s-server:
+    image: rancher/k3s:v1.28.2-k3s1
+    container_name: k3s-server
+    command:
+      - server
+      - --disable
+      - traefik
+      - --write-kubeconfig
+      - /output/kubeconfig.yaml
+      - --write-kubeconfig-mode
+      - "644"
+      - --tls-san
+      - k3s-server
+    privileged: true
+    environment:
+      - K3S_KUBECONFIG_MODE=644
+    ports:
+      - "6443:6443"
+      - "30081:30081"
+      - "30082:30082"
+    volumes:
+      - k3s_kubeconfig:/output
+    networks:
+      - net-qa
+      - net-prd
+      - net-mon
+
+  # Servidor de CI/CD
+  jenkins:
+    build:
+      context: .
+      dockerfile: jenkins/Dockerfile
+    container_name: jenkins-mcp-lab
+    environment:
+      GMAIL_USER: ${GMAIL_USER:?Define GMAIL_USER en .env}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:?Define GMAIL_APP_PASSWORD en .env}
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - k3s_kubeconfig:/k3s:ro
+    group_add:
+      - "${DOCKER_GID:-999}"
+    networks:
+      - net-qa
+      - net-prd
+      - net-mon
+
+  # Agente Orquestador con LangChain
+  devops-agent:
+    build: .
+    container_name: devops-langchain-agent
+    env_file:
+      - .env
+    volumes:
+      - ./ansible:/app/ansible
+      - ./k8s:/app/k8s
+      - k3s_kubeconfig:/k3s:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - jenkins
+      - k3s-server
+    networks:
+      - net-qa
+      - net-prd
+      - net-mon
+
+  # Stack de Monitoreo Central
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - net-mon
+      - net-qa
+      - net-prd
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-dashboard
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - net-mon
+
+volumes:
+  jenkins_data:
+  k3s_kubeconfig:
+
+networks:
+  net-qa:
+    driver: bridge
+    name: net-qa
+  net-prd:
+    driver: bridge
+    name: net-prd
+  net-mon:
+    driver: bridge
+    name: net-mon

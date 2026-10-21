@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'k8s-qa-pods'
+    static_configs:
+      - targets: ['k3s-server:30081']
+
+  - job_name: 'k8s-prd-pods'
+    static_configs:
+      - targets: ['k3s-server:30082']
+
+  - job_name: 'jenkins'
+    static_configs:
+      - targets: ['jenkins:8080']
